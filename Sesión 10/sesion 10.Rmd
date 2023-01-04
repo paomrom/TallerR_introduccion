@@ -1,0 +1,201 @@
+---
+title: "Sesión 2"
+author: "Nancy Manzo"
+date: '2022-06-15'
+output:
+  prettydoc::html_pretty:
+    theme: leonids
+    highlight: github
+---
+
+Cargamos las librerías
+
+```{r message=FALSE, warning=FALSE}
+library(readxl) #subir nuestros archivos de excel
+library(ggplot2) #realizar visualizaciones como gráficos
+library(dplyr) #manipulación de nuestra data
+library(tidyr) #ordenas nuestra data, especificamente en drop_na
+library(plotly) #gráficos interactivos
+library(viridis) #paleta de color prediseñada
+library(stringr) #la usamos para ajustar el tamaño del texto en nuestros ejes
+library(tidyverse) 
+```
+
+Subimos nuestra base:
+
+```{r, message=TRUE, warning=FALSE}
+
+base<-read.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSQqoPAWicmKfsIKNvYIJMxT-iWoGdLuqMtXF4NCk9US55WB3PQTY1gDvLJLfv8vPipliPEIhEkv9aV/pub?output=csv",encoding = "UTF-8")
+
+
+```
+
+### Análisis
+Renombrar nuestros valores, en este caso los meses numéricos por su nombre [01 -\> enero]
+
+```{r message=FALSE, warning=FALSE}
+
+
+base %>% 
+  filter(TEMATICA_2=="VIOLENCIA FAMILIAR",
+         AÑO_ALTA >=2017) %>% 
+  count(AÑO_ALTA, MES_ALTA)
+
+base %>% 
+  filter(TEMATICA_2=="VIOLENCIA FAMILIAR",
+         AÑO_ALTA >=2017) %>% 
+  mutate(MES=case_when(
+    MES_ALTA== 1~"ene",
+    MES_ALTA== 2~"feb",
+    MES_ALTA== 3~"mar",
+    MES_ALTA== 4~"abr",
+    MES_ALTA== 5~"may",
+    MES_ALTA== 6~"jun",
+    MES_ALTA== 7~"jul",
+    MES_ALTA== 8~"ago",
+    MES_ALTA== 9~"sep",
+    MES_ALTA== 10~"oct",
+    MES_ALTA== 11~"nov",
+    MES_ALTA== 12~"dic"),
+    MES=factor(MES,
+               levels=c("ene", "feb", "mar","abr", "may", "jun",
+                        "jul", "ago", "sep","oct", "nov", "dic"))) %>% 
+  count(AÑO_ALTA, MES, name = "TOTAL") %>% 
+  pivot_wider(names_from = "AÑO_ALTA",
+              values_from = "TOTAL") #pivot_wider es para cambiar la posición de filas y columnas
+```
+![](https://epirhandbook.com/en/images/pivoting/pivot_wider_new.png)
+
+Visualizar el comportamiento de las llamadas en el tiempo:
+
+```{r message=FALSE, warning=FALSE}
+base %>% 
+  filter(TEMATICA_2 %in% c("VIOLENCIA FAMILIAR"),
+         AÑO_ALTA >=2017) %>% 
+  count(AÑO_ALTA, MES_ALTA)%>% 
+  ggplot(aes(x = MES_ALTA, y = n, 
+             fill = AÑO_ALTA, colour=AÑO_ALTA, group=1)) +
+  geom_point() +
+  geom_line()+
+  scale_color_viridis_c(option = "viridis", direction = 1) + #color de relleno
+  scale_fill_viridis_c(option = "viridis", direction = 1) + #color del contorno
+  scale_x_continuous(limits = c(0, 12))+ #límites del eje x
+  labs(title = "", fill="Año", colour="Año",
+       x="", y="")+ #titulo
+  theme_minimal() -> grafico_mes
+
+```
+
+Comparativa entre meses
+
+```{r}
+ggplotly(grafico_mes)
+
+```
+
+
+
+#### Transformemos fechas
+
+Es necesario descargar e instalar `lubridate` ![](https://i.stack.imgur.com/nqPgy.png)
+
+```{r message=FALSE, warning=FALSE}
+library(lubridate)
+
+base$FECHA <-as.Date(base$FECHA_ALTA, format="%d/%m/%Y") #definir nuetra variable en tipo de fecha
+base$PERIODO  <-format(as.Date(base$FECHA_ALTA, format="%d/%m/%Y"), "%Y/%m") # 15/03/2022 -> 03/2022
+
+base %>% 
+  filter(TEMATICA_2%in%c("VIOLENCIA FAMILIAR")) %>% 
+  count(PERIODO, AÑO_ALTA) %>% 
+  ggplot(aes(x=PERIODO, y=n,group=1))+
+    geom_point(fill="purple", colour="purple", size = 2)+
+    geom_line(colour="purple", size = 1) +
+    # geom_text(aes(x=PERIODO, y=n, label=n), 
+    #           colour="black", size=4, angle=90,
+    #           hjust=-1, vjust=1,)+              #añadir la etiqueta de valor
+  geom_vline(xintercept ="2020/03", linetype="dashed",
+             color='red', size=1)+ #añadir linea vertical
+  labs(title = "Comparativa entre llamadas por violencia y violencia familiar",
+       x="Período mensual", y="Total de llamadas", 
+       fill="Temática", colour="Temática",
+       caption = "Elaboración propia con datos del Gobierno de la CDMX")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 90))->graf_periodo #rotar el texto del eje
+
+
+```
+
+Comportamiento de las llamadas de violencia en el tiempo
+
+```{r message=FALSE, warning=FALSE}
+graf_periodo
+```
+
+```{r message=FALSE, warning=FALSE}
+ggplotly(graf_periodo)
+
+```
+
+------------------------------------------------------------------------
+
+Calculamos el promedio de llamadas en todo el período
+
+```{r message=FALSE, warning=FALSE}
+base %>% 
+  filter(TEMATICA_2 == "VIOLENCIA FAMILIAR") %>% 
+  count(PERIODO, AÑO_ALTA) %>% 
+  summarise(Promedio=mean(n))  # Calcular el promedio de llamadas por V. Familiar
+
+
+graf_periodo +
+  geom_hline(yintercept = 281.46, colour="orange") #añadir línea horizontal
+```
+
+------------------------------------------------------------------------
+
+#### Quiénes están realizando las llamadas por motivos de violencia familiar
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+
+base %>% 
+  filter(TEMATICA_2=="VIOLENCIA FAMILIAR") %>% 
+  count(OCUPACION, AÑO_ALTA, name = "TOTAL") %>% 
+  drop_na() %>% 
+  arrange(-TOTAL) #ordena de manera ascendente / descendiente, el "-" inicial es para orientar el orden
+
+```
+
+![](https://epirhandbook.com/en/images/pivoting/pivot_wider_new.png)
+
+```{r message=FALSE, warning=FALSE}
+
+base %>% 
+  filter(TEMATICA_2=="VIOLENCIA FAMILIAR") %>% 
+  count(OCUPACION, AÑO_ALTA, name = "TOTAL") %>% 
+  drop_na() %>% 
+  arrange(-TOTAL) %>% 
+  pivot_wider(names_from = "OCUPACION", values_from = "TOTAL")  #invertir la posición entre filas y columnas
+
+```
+
+```{r message=FALSE, warning=FALSE}
+
+base %>% 
+  filter(TEMATICA_2=="VIOLENCIA FAMILIAR") %>% 
+  count(OCUPACION, AÑO_ALTA, name = "TOTAL") %>% 
+  drop_na() %>% 
+  arrange(-TOTAL) %>% 
+ ggplot(aes(x=reorder(OCUPACION, -TOTAL), y=TOTAL, fill=as.factor(AÑO_ALTA))) + #as.factor() que el valor númerico se convierta a factor, o sea una variable categórica con un orden
+  geom_col(position = "dodge") +
+  scale_fill_viridis_d(option = "viridis", direction = 1) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 2)) + #Este reglón es para ajustar el tamaño de texto que cabe en cada var de x
+  labs(title = "", fill="Año", 
+       x="", y="Total de llamadas")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45)) ->grafico_ocupación
+
+ggplotly(grafico_ocupación)
+
+
+```
